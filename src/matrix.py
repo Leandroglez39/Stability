@@ -2711,7 +2711,37 @@ def process_folder(net_version: str, num_iter: int, folder: str, algorithms_name
                 
                 value = m.RoughClustering(communities=comunities_subset)
                 m.export_RC(f'stability/{net_version}/{folder}/', f'{folder}_RC_{iter}_run_{i}.txt', value)
-        
+
+def process_folder_parallel(net_version: str, num_iter: int, folder: str, algorithms_names: list[str], folder_path: str, iter_list: list[int]):
+
+    m = Matrix([], {},[])
+    
+    params = []
+
+    for i in range(20):
+
+            all_communities = []
+
+            for algorithm in algorithms_names:
+                communities = pickle.load(open(f'{folder_path}/{folder}/{algorithm}_{num_iter}_run_{i}.pkl', 'rb'))
+                all_communities.extend(communities)
+
+            
+            m.G = pickle.load(open(f'dataset/{net_version}/{folder}/{folder}.pkl', 'rb'))
+
+
+            for iter in iter_list:
+                comunities_subset = []
+                for j in range(4):
+                    index = j * num_iter
+                    comunities_subset.extend(all_communities[index:(index + iter)])
+                     
+                params.append((m, comunities_subset, [net_version, folder, iter, i]))
+
+    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+        pool.starmap(wrapper_rc, params)        
+
+
 def evaluate_stability_parallel(net_version: str, num_iter: int):
 
     algorithms_names = ['louvain', 'infomap', 'greedy', 'async_lpa']
@@ -2724,7 +2754,20 @@ def evaluate_stability_parallel(net_version: str, num_iter: int):
 
     with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
         pool.starmap(process_folder, [(net_version, num_iter, folder, algorithms_names, folder_path, iter_list) for folder in folder_list])
+
+
+
+def wrapper_rc(m: Matrix, iterations: list, params: list):
+    
+    net_version = params[0]
+    folder = params[1]
+    iter = params[2]
+    i = params[3]
+
+    value = m.RoughClustering(communities=iterations)
+    m.export_RC(f'stability/{net_version}/{folder}/', f'{folder}_RC_{iter}_run_{i}.txt', value)
         
+
 if __name__ == '__main__':
 
     print(datetime.datetime.now())
