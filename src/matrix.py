@@ -2766,7 +2766,49 @@ def wrapper_rc(m: Matrix, iterations: list, params: list):
 
     value = m.RoughClustering(communities=iterations)
     m.export_RC(f'stability/{net_version}/{folder}/', f'{folder}_RC_{iter}_run_{i}.txt', value)
-        
+
+def evaluate_modularity(net_version: str):
+    
+    algorithms_names = ['louvain', 'infomap', 'greedy', 'async_lpa']
+
+    folder_path = f'output/stability/{net_version}'
+
+    folder_list = os.listdir(folder_path)
+
+    iter_list = [10, 100, 1000] if net_version == 'NetsType_1.4' else [10, 50, 100]
+    
+    m = Matrix([], {},[])
+
+    modularity_dict = {}
+
+    for folder in folder_list:
+
+        m.G = pickle.load(open(f'dataset/{net_version}/{folder}/{folder}.pkl', 'rb'))
+
+        for algorithm in algorithms_names:
+
+            modularity_dict[algorithm] = {}
+
+
+            for i in range(20):
+
+                communities = pickle.load(open(f'{folder_path}/{folder}/{algorithm}_{1000}_run_{i}.pkl', 'rb'))
+                
+                modularity_list = []
+                for com in communities:
+                    mod = nx.algorithms.community.quality.modularity(m.G, com)
+                    modularity_list.append(mod)
+
+                for iter in iter_list:
+                    position = modularity_list.index(max(modularity_list[0:iter]))
+                    if i not in modularity_dict[algorithm].keys():
+                        modularity_dict[algorithm][i] = {iter: (position, modularity_list[position])}
+                    else:
+                        modularity_dict[algorithm][i][iter] = (position, modularity_list[position])
+    pickle.dump(modularity_dict, open(f'output/stability/{net_version}/modularity_dict.pkl', 'wb'))         
+
+            
+           
 
 if __name__ == '__main__':
 
@@ -2776,10 +2818,10 @@ if __name__ == '__main__':
     m = Matrix([], {},[])
 
     #analyze_overlaping('NetsType_1.4')
-    
-    import asyncio
 
-    asyncio.run(evaluate_stability_parallel('NetsType_1.4', 1000))
+    evaluate_modularity('NetsType_1.4')
+
+    #valuate_stability_parallel('NetsType_1.4', 1000)
   
     #evaluate_stability('NetsType_1.4', 1000)
         
