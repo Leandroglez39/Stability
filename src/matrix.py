@@ -2782,6 +2782,8 @@ def evaluate_modularity(net_version: str):
     modularity_dict = {}
 
     for folder in folder_list:
+        
+        print(f'Processing {folder}', datetime.datetime.now())
 
         m.G = pickle.load(open(f'dataset/{net_version}/{folder}/{folder}.pkl', 'rb'))
 
@@ -2792,7 +2794,7 @@ def evaluate_modularity(net_version: str):
 
             for i in range(20):
 
-                communities = pickle.load(open(f'{folder_path}/{folder}/{algorithm}_{1000}_run_{i}.pkl', 'rb'))
+                communities = pickle.load(open(f'{folder_path}/{folder}/{algorithm}_{100}_run_{i}.pkl', 'rb'))
                 
                 modularity_list = []
                 for com in communities:
@@ -2805,6 +2807,7 @@ def evaluate_modularity(net_version: str):
                         modularity_dict[algorithm][i] = {iter: (position, modularity_list[position])}
                     else:
                         modularity_dict[algorithm][i][iter] = (position, modularity_list[position])
+        print(f'Finished {folder}', datetime.datetime.now())
     pickle.dump(modularity_dict, open(f'output/stability/{net_version}/modularity_dict.pkl', 'wb'))         
 
             
@@ -2819,9 +2822,9 @@ if __name__ == '__main__':
 
     #analyze_overlaping('NetsType_1.4')
 
-    evaluate_modularity('NetsType_1.4')
+    evaluate_modularity('NetsType_1.6')
 
-    #valuate_stability_parallel('NetsType_1.4', 1000)
+    #evaluate_stability_parallel('NetsType_1.6', 100)
   
     #evaluate_stability('NetsType_1.4', 1000)
         
