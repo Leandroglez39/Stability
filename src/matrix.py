@@ -2810,8 +2810,182 @@ def evaluate_modularity(net_version: str):
         print(f'Finished {folder}', datetime.datetime.now())
     pickle.dump(modularity_dict, open(f'output/stability/{net_version}/modularity_dict.pkl', 'wb'))         
 
-            
-           
+def nmi_stability(foldername: str):
+    
+    algorithms_names = ['louvain', 'infomap', 'greedy', 'async_lpa']   
+
+    from cdlib import evaluation, NodeClustering
+
+    files = os.listdir('dataset/' + foldername)
+    files.remove('GT')
+    files.remove('README.txt')
+
+    files = sorted(files, key=lambda x: int("".join([i for i in x if i.isdigit()])))
+
+    iter_list = [10, 100, 1000] if foldername == 'NetsType_1.4' else [10, 50, 100]
+    iter_lenght = 1000 if foldername == 'NetsType_1.4' else 100
+
+    modularity_dict = pickle.load(open(f'output/stability/{foldername}/modularity_dict.pkl', 'rb'))
+
+    df = pd.DataFrame(columns=['Network','Algorithm', 'Sequence','NMI', 'Index_Higher' , 'Iterations'])
+
+    for file in files:
+        print(f'Processing file: {file}', datetime.datetime.now())
+
+        if '.pkl' in file:
+            continue
+        nodes = []
+        match = re.search(r'(network)(\d+)', file)
+        number = '0'
+        if match:
+            number = str(match.group(2))
+            with open('dataset/' + foldername + '/GT/community' + number + '_GT.dat', 'r') as f:
+                lines = f.readlines()        
+                for line in lines:
+                    data = line.split(' ')
+                    inter_data = [int(x) for x in data]
+                    nodes.append(inter_data)
+        
+        G = pickle.load(open('dataset/' + foldername + '/' + file + '/' + file + '.pkl', 'rb')) 
+    
+        # GT created
+        nodeClustA = NodeClustering(communities=nodes, graph=G, method_name='GT', method_parameters={}, overlap=True)
+
+        for iter in iter_list:
+            for i in range(20):
+                nodes = []
+                with open(f'output/stability/{foldername}/{file}/{file}_RC_{iter}_run_{i}.txt', 'r') as f:
+                    lines = f.readlines()        
+                    for line in lines:
+                        line = line.strip('\n').rstrip()
+                        data = line.split(' ')
+                        inter_data = [int(x) for x in data]
+                        nodes.append(inter_data)
+
+                nodeClustB = NodeClustering(communities=nodes, graph=G, method_name='RC', method_parameters={}, overlap=True)
+                nmi = evaluation.overlapping_normalized_mutual_information_MGH(nodeClustA, nodeClustB)
+                new_row = pd.DataFrame({'Network': file, 'Algorithm': 'RC', 'Sequence': i, 'NMI': nmi.score, 'Index_Higher': 0, 'Iterations': iter}, index=[0])
+                df = pd.concat([df, new_row], ignore_index=True)
+                
+                for algorithm in algorithms_names:
+
+                    communities = pickle.load(open(f'output/stability/{foldername}/{file}/{algorithm}_{iter_lenght}_run_{i}.pkl', 'rb'))
+                    
+                    index = modularity_dict[algorithm][i][iter][0]
+                    communities = communities[index]
+                    
+                    nodeClustB = NodeClustering(communities=communities, graph=G, method_name=algorithm, method_parameters={}, overlap=True)
+                    nmi = evaluation.overlapping_normalized_mutual_information_MGH(nodeClustA, nodeClustB)
+                    
+                   
+                    new_row = pd.DataFrame({'Network': file, 'Algorithm': algorithm, 'Sequence': i, 'NMI': nmi.score, 'Index_Higher': index, 'Iterations': iter}, index=[0])
+                    df = pd.concat([df, new_row], ignore_index=True)
+        nodes = []
+        print(f'Finished file: {file}', datetime.datetime.now())        
+    df.to_csv(f'output/stability/{foldername}/nmi_stability.csv', index=False)
+
+def save_nmi_pkl_to_cvs(path: str):
+
+    pickle_data = pickle.load(open(path, 'rb'))
+
+    df = pd.DataFrame(columns=['Network','Algorithm', 'Sequence','NMI', 'Index_Higher' , 'Iterations'])
+
+    for data in pickle_data:
+        new_row = pd.DataFrame({'Network': data[1], 'Algorithm': data[2], 'Sequence': data[3], 'NMI': data[0], 'Index_Higher': data[4], 'Iterations': data[5]}, index=[0])
+        df = pd.concat([df, new_row], ignore_index=True)
+    
+    df.to_csv(f'{path[:-4]}.csv', index=False)
+
+def nmi_stability_parallel(foldername: str):
+    
+    algorithms_names = ['louvain', 'infomap', 'greedy', 'async_lpa']   
+
+    from cdlib import evaluation, NodeClustering
+
+    files = os.listdir('dataset/' + foldername)
+    files.remove('GT')
+    files.remove('README.txt')
+
+    files = sorted(files, key=lambda x: int("".join([i for i in x if i.isdigit()])))
+
+    iter_list = [10, 100, 1000] if foldername == 'NetsType_1.4' else [10, 50, 100]
+    iter_lenght = 1000 if foldername == 'NetsType_1.4' else 100
+
+    modularity_dict = pickle.load(open(f'output/stability/{foldername}/modularity_dict.pkl', 'rb'))
+   
+
+    data_inpust = []
+
+    for file in files:
+        print(f'Processing file: {file}', datetime.datetime.now())
+
+        if '.pkl' in file:
+            continue
+        nodes = []
+        match = re.search(r'(network)(\d+)', file)
+        number = '0'
+        if match:
+            number = str(match.group(2))
+            with open('dataset/' + foldername + '/GT/community' + number + '_GT.dat', 'r') as f:
+                lines = f.readlines()        
+                for line in lines:
+                    data = line.split(' ')
+                    inter_data = [int(x) for x in data]
+                    nodes.append(inter_data)
+        
+        G = pickle.load(open('dataset/' + foldername + '/' + file + '/' + file + '.pkl', 'rb')) 
+    
+        # GT created
+        nodeClustA = NodeClustering(communities=nodes, graph=G, method_name='GT', method_parameters={}, overlap=True)
+
+        for iter in iter_list:
+            for i in range(20):
+                nodes = []
+                with open(f'output/stability/{foldername}/{file}/{file}_RC_{iter}_run_{i}.txt', 'r') as f:
+                    lines = f.readlines()        
+                    for line in lines:
+                        line = line.strip('\n').rstrip()
+                        data = line.split(' ')
+                        inter_data = [int(x) for x in data]
+                        nodes.append(inter_data)
+
+                nodeClustB = NodeClustering(communities=nodes, graph=G, method_name='RC', method_parameters={}, overlap=True)
+                
+                                
+                data_inpust.append((nodeClustA, nodeClustB, file, 'RC', i, 0, iter))
+                
+                
+                for algorithm in algorithms_names:
+
+                    communities = pickle.load(open(f'output/stability/{foldername}/{file}/{algorithm}_{iter_lenght}_run_{i}.pkl', 'rb'))
+                    
+                    index = modularity_dict[algorithm][i][iter][0]
+                    communities = communities[index]
+                    
+                    nodeClustB = NodeClustering(communities=communities, graph=G, method_name=algorithm, method_parameters={}, overlap=True)
+                    
+                   
+                    data_inpust.append((nodeClustA, nodeClustB, file, algorithm, i, index, iter))
+                    
+        nodes = []
+        print(f'Finished file: {file}', datetime.datetime.now())        
+
+    pickle.dump(data_inpust, open(f'output/stability/{foldername}/nmi_stability_data_inputs.pkl', 'wb'))
+
+    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+        results = pool.starmap(wrapper_nmi_stability, data_inpust)
+    
+    pickle.dump(results, open(f'output/stability/{foldername}/nmi_stability.pkl', 'wb'))
+
+
+def wrapper_nmi_stability(nodeClustA, nodeClustB, file: str, algorithm: str, i: int, index: int, iter: int):
+    
+    from cdlib import evaluation
+
+    value = evaluation.overlapping_normalized_mutual_information_MGH(nodeClustA, nodeClustB)
+
+    return (value.score, file, algorithm, i, index, iter)           
+
 
 if __name__ == '__main__':
 
@@ -2822,7 +2996,18 @@ if __name__ == '__main__':
 
     #analyze_overlaping('NetsType_1.4')
 
-    evaluate_modularity('NetsType_1.6')
+    #nmi_stability('NetsType_1.6')
+
+    save_nmi_pkl_to_cvs('output/stability/NetsType_1.6/nmi_stability.pkl')
+
+    datas = pickle.load(open('output/stability/NetsType_1.6/nmi_stability.pkl', 'rb'))
+
+    print(datas[0])
+    
+    # df = pd.read_csv('output/stability/NetsType_1.4/nmi_stability.csv', header=0)
+    # df = df[df['Algorithm'] == 'RC']
+    # print(df.describe())
+    #evaluate_modularity('NetsType_1.6')
 
     #evaluate_stability_parallel('NetsType_1.6', 100)
   
